@@ -144,3 +144,50 @@ jobs:
       - name: Skipped (no Cloudflare secrets)
         if: env.HAS_SECRETS != 'true'
         run: echo "Секреты Cloudflare не заданы — выкладка пропущена."
+
+  # ---------------------------------------------------------------- 3c. deploy: по SSH собственным action
+  # Используется action https://github.com/777werona-afk/rsync-ssh-deploy (тег v1).
+  # Постоянного SSH-сервера у проекта нет, поэтому job выкладывает сайт на sshd, поднятый на самом раннере,
+  # и проверяет результат. Для реального сервера достаточно заменить host, user, path и ключ на секреты.
+  deploy-ssh:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site-hosting
+          path: site-hosting
+
+      - name: Start local sshd and create a key
+        id: ssh
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq openssh-server rsync
+          sudo service ssh start
+          ssh-keygen -t ed25519 -N '' -f "$RUNNER_TEMP/id_site" -q
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          cat "$RUNNER_TEMP/id_site.pub" >> ~/.ssh/authorized_keys
+          chmod 600 ~/.ssh/authorized_keys
+          echo "user=$(whoami)" >> "$GITHUB_OUTPUT"
+          {
+            echo 'key<<EOF_KEY'
+            cat "$RUNNER_TEMP/id_site"
+            echo 'EOF_KEY'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Deploy over SSH with rsync-ssh-deploy
+        id: deploy
+        uses: 777werona-afk/rsync-ssh-deploy@v1
+        with:
+          host: localhost
+          user: ${{ steps.ssh.outputs.user }}
+          path: /tmp/site-ssh
+          source: site-hosting
+          key: ${{ steps.ssh.outputs.key }}
+          delete: 'true'
+
+      - name: Check the deployed copy
+        run: |
+          echo "Передано файлов: ${{ steps.deploy.outputs.files_transferred }}"
+          test -f /tmp/site-ssh/index.html
+          grep -q 'Стабилизация взгляда в VR' /tmp/site-ssh/index.html
