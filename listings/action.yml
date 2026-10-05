@@ -1,0 +1,136 @@
+name: 'Rsync SSH Deploy'
+description: 'Выкладывает каталог (например, собранный статический сайт) на сервер по SSH с помощью rsync; поддерживает удаление лишних файлов.'
+author: 'Marina Kozhevyatkina'
+
+branding:
+  icon: 'upload-cloud'
+  color: 'blue'
+
+inputs:
+  host:
+    description: 'Имя или адрес сервера, например helios.example.org.'
+    required: true
+  user:
+    description: 'Имя пользователя на сервере.'
+    required: true
+  path:
+    description: 'Каталог назначения на сервере (абсолютный или относительно домашнего каталога).'
+    required: true
+  source:
+    description: 'Исходный каталог в рабочей папке задания.'
+    required: false
+    default: 'site'
+  key:
+    description: 'Закрытый SSH-ключ (передавайте через secrets, не в открытом виде).'
+    required: true
+  delete:
+    description: 'Если "true", на сервере удаляются файлы, которых нет в исходном каталоге (флаг rsync --delete).'
+    required: false
+    default: 'false'
+  port:
+    description: 'Порт SSH.'
+    required: false
+    default: '22'
+  known_hosts:
+    description: 'Строки known_hosts для проверки сервера. Если пусто, отпечаток запрашивается через ssh-keyscan при первом подключении (менее безопасно).'
+    required: false
+    default: ''
+  dry_run:
+    description: 'Если "true", rsync только показывает, что будет сделано (--dry-run).'
+    required: false
+    default: 'false'
+
+outputs:
+  destination:
+    description: 'Итоговое назначение в формате user@host:path.'
+    value: ${{ steps.sync.outputs.destination }}
+  files_transferred:
+    description: 'Сколько файлов передано (по статистике rsync).'
+    value: ${{ steps.sync.outputs.files_transferred }}
+  files_deleted:
+    description: 'Сколько файлов удалено на сервере (по статистике rsync; 0, если delete не включён).'
+    value: ${{ steps.sync.outputs.files_deleted }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check inputs
+      shell: bash
+      env:
+        IN_HOST: ${{ inputs.host }}
+        IN_USER: ${{ inputs.user }}
+        IN_PATH: ${{ inputs.path }}
+        IN_SOURCE: ${{ inputs.source }}
+        IN_DELETE: ${{ inputs.delete }}
+      run: |
+        # входные данные проверяются до подключения к серверу
+        for v in IN_HOST IN_USER IN_PATH IN_SOURCE; do
+          if [ -z "${!v}" ]; then echo "::error::Параметр ${v#IN_} не задан"; exit 1; fi
+        done
+        if [ ! -d "$IN_SOURCE" ]; then
+          echo "::error::Исходный каталог '$IN_SOURCE' не найден"; exit 1
+        fi
+        if [ -z "$(ls -A "$IN_SOURCE")" ]; then
+          echo "::error::Исходный каталог '$IN_SOURCE' пуст: выкладка с удалением стёрла бы сайт на сервере"; exit 1
+        fi
+        # защита от опасных путей при удалении
+        if [ "$IN_DELETE" = "true" ]; then
+          case "$IN_PATH" in
+            /|.|~|~/|"") echo "::error::Путь '$IN_PATH' слишком опасен для режима delete"; exit 1;;
+          esac
+        fi
+
+    - name: Prepare SSH key
+      shell: bash
+      env:
+        IN_KEY: ${{ inputs.key }}
+        IN_HOST: ${{ inputs.host }}
+        IN_PORT: ${{ inputs.port }}
+        IN_KNOWN_HOSTS: ${{ inputs.known_hosts }}
+      run: |
+        # ключ и known_hosts лежат во временной папке раннера и удаляются в последнем шаге
+        dir="$RUNNER_TEMP/rsync-ssh-deploy"
+        mkdir -p "$dir" && chmod 700 "$dir"
+        printf '%s\n' "$IN_KEY" > "$dir/key"
+        chmod 600 "$dir/key"
+        if [ -n "$IN_KNOWN_HOSTS" ]; then
+          printf '%s\n' "$IN_KNOWN_HOSTS" > "$dir/known_hosts"
+        else
+          echo "::warning::known_hosts не задан: отпечаток сервера берётся через ssh-keyscan и не проверяется заранее"
+          ssh-keyscan -p "$IN_PORT" "$IN_HOST" > "$dir/known_hosts" 2>/dev/null
+        fi
+        echo "RSD_DIR=$dir" >> "$GITHUB_ENV"
+
+    - name: Sync with rsync
+      id: sync
+      shell: bash
+      env:
+        IN_HOST: ${{ inputs.host }}
+        IN_USER: ${{ inputs.user }}
+        IN_PATH: ${{ inputs.path }}
+        IN_SOURCE: ${{ inputs.source }}
+        IN_DELETE: ${{ inputs.delete }}
+        IN_PORT: ${{ inputs.port }}
+        IN_DRY: ${{ inputs.dry_run }}
+      run: |
+        args=(-az --stats)
+        [ "$IN_DELETE" = "true" ] && args+=(--delete)
+        [ "$IN_DRY" = "true" ] && args+=(--dry-run)
+        ssh_cmd="ssh -i $RSD_DIR/key -p $IN_PORT -o IdentitiesOnly=yes -o UserKnownHostsFile=$RSD_DIR/known_hosts -o StrictHostKeyChecking=yes"
+        dest="$IN_USER@$IN_HOST:$IN_PATH"
+        # слэш после источника: копируется содержимое каталога, а не сам каталог
+        rsync "${args[@]}" -e "$ssh_cmd" "${IN_SOURCE%/}/" "${dest%/}/" | tee "$RSD_DIR/stats.txt"
+        num() { grep -E "$1" "$RSD_DIR/stats.txt" | head -n1 | awk -F: '{gsub(/[ ,]/,"",$2); print $2}'; }
+        {
+          echo "destination=$dest"
+          echo "files_transferred=$(num 'Number of (regular )?files transferred')"
+          echo "files_deleted=$(num 'Number of deleted files')"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Remove key
+      if: always()
+      shell: bash
+      run: |
+        # ключ не остаётся на раннере даже при ошибке rsync
+        [ -n "${RSD_DIR:-}" ] && rm -rf "$RSD_DIR"
+        true

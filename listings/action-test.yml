@@ -1,0 +1,93 @@
+name: Test action
+
+# Проверка action на самом раннере: поднимаем локальный sshd и выкладываем каталог на localhost.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start local sshd and create a key
+        id: ssh
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq openssh-server rsync
+          sudo service ssh start
+          ssh-keygen -t ed25519 -N '' -f "$RUNNER_TEMP/id_test" -q
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          cat "$RUNNER_TEMP/id_test.pub" >> ~/.ssh/authorized_keys
+          chmod 600 ~/.ssh/authorized_keys
+          echo "user=$(whoami)" >> "$GITHUB_OUTPUT"
+          {
+            echo 'key<<EOF_KEY'
+            cat "$RUNNER_TEMP/id_test"
+            echo 'EOF_KEY'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Prepare source directory
+        run: |
+          mkdir -p src/sub
+          echo "one" > src/index.html
+          echo "two" > src/sub/page.html
+
+      - name: First deploy
+        id: first
+        uses: ./
+        with:
+          host: localhost
+          user: ${{ steps.ssh.outputs.user }}
+          path: /tmp/deploy-target
+          source: src
+          key: ${{ steps.ssh.outputs.key }}
+          delete: 'true'
+
+      - name: Create a stale file on the server and remove a file from the source
+        run: |
+          echo "stale" > /tmp/deploy-target/stale.html
+          rm src/sub/page.html
+
+      - name: Second deploy (must delete stale files)
+        id: second
+        uses: ./
+        with:
+          host: localhost
+          user: ${{ steps.ssh.outputs.user }}
+          path: /tmp/deploy-target
+          source: src
+          key: ${{ steps.ssh.outputs.key }}
+          delete: 'true'
+
+      - name: Check result and outputs
+        run: |
+          echo "first: ${{ steps.first.outputs.files_transferred }} transferred"
+          echo "second: ${{ steps.second.outputs.files_deleted }} deleted"
+          test -f /tmp/deploy-target/index.html
+          test ! -e /tmp/deploy-target/stale.html
+          test ! -e /tmp/deploy-target/sub/page.html
+          test "${{ steps.second.outputs.destination }}" = "${{ steps.ssh.outputs.user }}@localhost:/tmp/deploy-target"
+
+      - name: Create an empty source directory
+        run: mkdir empty
+
+      - name: Empty source must be rejected
+        id: empty
+        continue-on-error: true
+        uses: ./
+        with:
+          host: localhost
+          user: ${{ steps.ssh.outputs.user }}
+          path: /tmp/deploy-target
+          source: empty
+          key: ${{ steps.ssh.outputs.key }}
+          delete: 'true'
+
+      - name: Check that the empty source failed
+        run: test "${{ steps.empty.outcome }}" = "failure"

@@ -32,13 +32,20 @@ theme:
   font: false
 
 nav:
-  - Главная: index.md
-  - Ход работы: workflow.md
-  - "P3. Конвейер данные → результат → сайт": practice/p3-pipeline.md
-  - "T3. Отечественные CI/CD и хостинги": research/t3-ci-cd.md
-  - Отладка: debug.md
-  - Вывод: conclusion.md
-  - Ссылки и лицензии: links.md
+  - Титульный лист: index.md
+  - "1. Введение": intro.md
+  - "2. Ход работы": workflow.md
+  - "3. Исследовательская задача T3": research/t3-ci-cd.md
+  - "4. Практическая задача P3": practice/p3-pipeline.md
+  - "5. GitHub Action": practice/action.md
+  - "6. Измерения": measurements.md
+  - "7. Отладка": debug.md
+  - "8. Заключение": conclusion.md
+  - "9. Ссылки и лицензии": links.md
+  - "Приложение А. Листинги": listings.md
+
+extra_css:
+  - stylesheets/extra.css
 
 extra:
   social:
@@ -53,6 +60,7 @@ plugins:
         - en
 
 markdown_extensions:
+  - md_in_html
   - admonition
   - attr_list
   - footnotes

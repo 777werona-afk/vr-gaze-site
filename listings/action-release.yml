@@ -1,0 +1,22 @@
+name: Move major tag
+
+# При публикации тега vX.Y.Z подвижный тег vX переставляется на тот же коммит,
+# чтобы пользователи могли писать uses: owner/repo@v1 и получать исправления.
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  major-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Move vX tag
+        run: |
+          major="${GITHUB_REF_NAME%%.*}"
+          git tag -f "$major" "$GITHUB_SHA"
+          git push -f origin "$major"

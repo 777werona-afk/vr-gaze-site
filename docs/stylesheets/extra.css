@@ -1,0 +1,57 @@
+/* Оформление отчёта в духе титульных листов Университета ИТМО */
+.titlepage {
+  text-align: center;
+  padding: 1.2rem 0 0.6rem;
+  line-height: 1.45;
+}
+.titlepage .ministry,
+.titlepage .university {
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin: 0 0 0.35rem;
+}
+.titlepage .university {
+  font-weight: 600;
+  margin-bottom: 1.6rem;
+}
+.titlepage .doctype {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 2.2rem 0 0.3rem;
+}
+.titlepage .doctitle {
+  font-size: 1.05rem;
+  margin: 0 auto 2.2rem;
+  max-width: 34rem;
+}
+.titlepage .meta {
+  margin: 0 auto 2rem;
+  max-width: 34rem;
+  text-align: left;
+  font-size: 0.9rem;
+}
+.titlepage .meta table {
+  width: 100%;
+  display: table;
+}
+.titlepage .city {
+  font-size: 0.9rem;
+  margin-top: 2.4rem;
+}
+.md-typeset h1 { font-weight: 700; }
+.md-typeset h2 { border-bottom: 1px solid var(--md-default-fg-color--lightest); padding-bottom: 0.25rem; }
+.md-typeset table:not([class]) { font-size: 0.8rem; }
+.md-typeset figure { margin: 1rem 0; }
+.md-typeset img { border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px; }
+.md-typeset img.noborder { border: none; }
+.figcap { text-align: center; font-size: 0.8rem; color: var(--md-default-fg-color--light); margin-top: -0.4rem; }
+
+@media print {
+  .md-header, .md-tabs, .md-sidebar, .md-footer, .md-top, .md-source { display: none !important; }
+  .md-content { margin: 0 !important; max-width: none !important; }
+  .md-content__inner { margin: 0 !important; padding: 0 !important; }
+  .md-typeset { font-size: 0.78rem; }
+  .md-typeset pre, .md-typeset table, .md-typeset img { break-inside: avoid; }
+  .md-typeset h1, .md-typeset h2, .md-typeset h3 { break-after: avoid; }
+}
