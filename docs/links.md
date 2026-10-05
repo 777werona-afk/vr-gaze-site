@@ -18,3 +18,5 @@
 
 - [Исходные материалы курса на Яндекс.Диске](https://disk.yandex.ru/i/RRaTxrn5psk7ZQ)
 - [MkDocs](https://www.mkdocs.org/) и [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/)
+
+- [Демонстрация падения сборки](missing-page.md)
