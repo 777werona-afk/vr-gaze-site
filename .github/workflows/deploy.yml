@@ -1,0 +1,156 @@
+name: Build and deploy docs
+
+# События, запускающие пайплайн:
+#  - push в main            -> lint -> build -> deploy (Pages и хостинг)
+#  - pull_request в main    -> lint -> build (деплой пропускается, секреты форков недоступны)
+#  - workflow_dispatch      -> ручной запуск (деплой только если выбрана ветка main)
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# минимальные права по умолчанию; расширяются точечно в нужных заданиях
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+  PAGES_URL: https://777werona-afk.github.io/vr-gaze-site/
+
+jobs:
+  # ---------------------------------------------------------------- 1. lint
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip            # кэш зависимостей по хешу requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Compute results (data -> tables and figures)
+        run: python scripts/analyze.py
+
+      # --strict превращает битые ссылки и предупреждения в ошибку сборки
+      - name: Build in strict mode
+        run: mkdocs build --strict --site-dir /tmp/site-lint
+
+  # ---------------------------------------------------------------- 2. build
+  build:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - run: pip install -r requirements.txt
+      - run: python scripts/analyze.py
+
+      # сборка для GitHub Pages
+      - name: Build for GitHub Pages
+        run: mkdocs build --strict --site-dir site
+        env:
+          SITE_URL: ${{ env.PAGES_URL }}
+
+      # отдельная сборка для хостинга (другой базовый URL)
+      - name: Build for hosting
+        run: mkdocs build --strict --site-dir site-hosting
+        env:
+          SITE_URL: ${{ vars.HOSTING_SITE_URL || env.PAGES_URL }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site-hosting
+          path: site-hosting
+          retention-days: 7
+
+  # ---------------------------------------------------------------- 3a. deploy: GitHub Pages
+  # только с основной ветки; для остальных веток выполняется лишь сборка
+  deploy-pages:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Healthcheck (HTTP 200 + control string)
+        run: |
+          code=$(curl -s -L -o page.html -w '%{http_code}' "${{ steps.deployment.outputs.page_url }}")
+          echo "HTTP $code"
+          test "$code" = "200"
+          grep -q 'Стабилизация взгляда в VR' page.html
+
+  # ---------------------------------------------------------------- 3b. deploy: отечественный хостинг по SSH
+  # Нужны секреты репозитория: HOSTING_HOST, HOSTING_USER, HOSTING_PATH,
+  # HOSTING_SSH_KEY (отдельный deploy-ключ), HOSTING_KNOWN_HOSTS (вывод ssh-keyscan,
+  # сверенный с отпечатком хоста). Без них задание пропускается.
+  deploy-hosting:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      HAS_SECRETS: ${{ secrets.HOSTING_HOST != '' }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site-hosting
+          path: site-hosting
+
+      # секреты передаются через env, а не подстановкой в текст команды
+      - name: Configure SSH
+        if: env.HAS_SECRETS == 'true'
+        env:
+          SSH_KEY: ${{ secrets.HOSTING_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.HOSTING_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # проверка ключа хоста включена: known_hosts приходит из секрета
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Upload with rsync
+        if: env.HAS_SECRETS == 'true'
+        env:
+          DEST: ${{ secrets.HOSTING_USER }}@${{ secrets.HOSTING_HOST }}:${{ secrets.HOSTING_PATH }}/
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" \
+            site-hosting/ "$DEST"
+
+      - name: Healthcheck (HTTP 200 + control string)
+        if: env.HAS_SECRETS == 'true' && vars.HOSTING_SITE_URL != ''
+        run: |
+          code=$(curl -s -L -o page.html -w '%{http_code}' "${{ vars.HOSTING_SITE_URL }}")
+          echo "HTTP $code"
+          test "$code" = "200"
+          grep -q 'Стабилизация взгляда в VR' page.html
+
+      - name: Skipped (no hosting secrets)
+        if: env.HAS_SECRETS != 'true'
+        run: echo "Секреты хостинга не заданы — выкладка на хостинг пропущена."

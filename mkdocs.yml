@@ -1,0 +1,69 @@
+site_name: Стабилизация взгляда в VR — результаты
+site_description: Отчёт по заданию 3 — статический сайт на MkDocs с результатами обработки записи взгляда в VR
+site_author: Кожевяткина Марина Алексеевна
+# SITE_URL подставляется из окружения: для GitHub Pages и для хостинга в подкаталоге значения разные
+site_url: !ENV [SITE_URL, "https://777werona-afk.github.io/vr-gaze-site/"]
+# repo_url намеренно не задан: виджет репозитория тема Material подгружает с api.github.com,
+# а сайт не должен делать внешних сетевых запросов. Ссылка на репозиторий — в подвале (extra.social).
+copyright: Контент — CC BY 4.0, код — MIT © 2026 Кожевяткина М. А.
+
+# относительные ссылки: сайт одинаково работает в корне и в подкаталоге
+use_directory_urls: true
+
+theme:
+  name: material
+  language: ru
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: indigo
+      toggle:
+        icon: material/weather-night
+        name: Тёмная тема
+    - scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Светлая тема
+  # шрифты и иконки отдаём локально, без Google Fonts (сайт работает без внешних CDN)
+  font: false
+
+nav:
+  - Главная: index.md
+  - Ход работы: workflow.md
+  - "P3. Конвейер данные → результат → сайт": practice/p3-pipeline.md
+  - "T3. Отечественные CI/CD и хостинги": research/t3-ci-cd.md
+  - Отладка: debug.md
+  - Вывод: conclusion.md
+  - Ссылки и лицензии: links.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/777werona-afk/vr-gaze-site
+      name: Репозиторий на GitHub
+
+plugins:
+  - search:
+      lang:
+        - ru
+        - en
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      linenums: true
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true

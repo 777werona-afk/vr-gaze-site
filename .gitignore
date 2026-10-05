@@ -1,0 +1,30 @@
+# виртуальное окружение
+.venv/
+venv/
+env/
+
+# каталоги сборки
+site/
+_build/
+
+# кэш
+__pycache__/
+*.pyc
+.cache/
+results/.cache.json
+
+# большие файлы (видео записей, архивы) не коммитим; небольшие CSV из data/raw/ коммитим
+*.mp4
+*.zip
+
+# ОС / редакторы
+.DS_Store
+.idea/
+.vscode/
+data/demo/
+
+# производные сборки расчёта (создаются make / CI)
+generated/
+docs/assets/generated/
+results/summary.csv
+results/meta.json
