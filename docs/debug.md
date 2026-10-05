@@ -103,5 +103,20 @@ gaze_session_20260916_205941   снижение: -214162929767755.2 %
 
 Сборка завершается ошибкой, job `lint` становится красным, и ни `build`, ни `deploy` не запускаются.
 
-!!! note "Заполнить после первого запуска"
-    Вставьте скриншоты красного и зелёного запусков workflow и текст ошибки из лога job `lint`.
+Я проверила это на реальном запуске. В `docs/links.md` я добавила строку `- [Демонстрация падения сборки](missing-page.md)` и запушила её в `main` (коммит `845bd78`). Запуск №5 завершился ошибкой за 39 секунд: `lint` красный, `build`, `deploy-pages` и `deploy-cloudflare` пропущены, поэтому опубликованный сайт остался прежним.
+
+![Красный запуск №5: lint упал, остальные задания пропущены](assets/screens/run-red.jpg)
+
+В логе шага `Build in strict mode` MkDocs прямо называет файл и ссылку:
+
+![Текст ошибки в логе job lint](assets/screens/lint-error-log.jpg)
+
+```text
+WARNING -  Doc file 'links.md' contains a link 'missing-page.md', but the target is not found among documentation files.
+Aborted with 1 warnings in strict mode!
+Error: Process completed with exit code 1.
+```
+
+Исправила так: убрала добавленную строку (коммит `83e27e3`). Запуск №6 прошёл полностью: `lint`, `build`, `deploy-pages` и `deploy-cloudflare` зелёные.
+
+![Зелёный запуск №6 после исправления](assets/screens/run-green.jpg)
