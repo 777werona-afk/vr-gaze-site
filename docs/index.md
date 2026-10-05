@@ -47,6 +47,8 @@
 | 9 | [Ссылки, источники и лицензии](links.md) | репозитории, сайты, источники, лицензии |
 | А | [Приложение: тексты пайплайнов](listings.md) | `deploy.yml`, `action.yml`, тестовый и релизный workflow |
 
+PDF-версия отчёта: [otchet-zadanie-3.pdf](files/otchet-zadanie-3.pdf).
+
 ## Метка версии этого сайта
 
 --8<-- "generated/version_stamp.md"
