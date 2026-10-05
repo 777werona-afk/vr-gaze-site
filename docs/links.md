@@ -6,7 +6,7 @@
 |---|---|
 | Репозиторий | <https://github.com/777werona-afk/vr-gaze-site> |
 | Сайт на GitHub Pages | <https://777werona-afk.github.io/vr-gaze-site/> |
-| Сайт на отечественном хостинге | _указать адрес после первой выкладки_ |
+| Сайт на Cloudflare Pages | <https://vr-gaze-site.pages.dev> |
 
 ## Лицензии
 

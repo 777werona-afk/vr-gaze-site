@@ -29,8 +29,7 @@ make strict     # строгая сборка, как в CI
 | `scripts/analyze.py` | расчёт, таблицы, графики, метка версии, кэш |
 | `scripts/make_demo_data.py` | генератор синтетических демо-данных |
 | `generated/` | таблица и метка версии (создаются скриптом, не коммитятся) |
-| `.github/workflows/deploy.yml` | lint → build → deploy (GitHub Pages и хостинг по SSH) |
-| `CHECKLIST.md` | что сделать вручную: настройки репозитория, секреты, скриншоты |
+| `.github/workflows/deploy.yml` | lint → build → deploy (GitHub Pages и Cloudflare Pages) |
 
 ## Лицензии
 

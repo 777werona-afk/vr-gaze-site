@@ -12,8 +12,8 @@
 | 6 | Локальная сборка | `mkdocs serve` для предпросмотра, затем `mkdocs build --strict` |
 | 7 | Репозиторий и отправка на GitHub | `git init`, репозиторий `vr-gaze-site` на GitHub |
 | 8 | GitHub Actions, Pages → Source = GitHub Actions | `.github/workflows/deploy.yml`, публикация через `upload-pages-artifact` и `deploy-pages` |
-| 9 | Сервер или аккаунт на Helios | доступ к Helios и deploy-ключ заводятся отдельно, данные хранятся в секретах репозитория |
-| 10 | Скорректировать YAML под площадку | отдельное задание `deploy-helios`: сборка с другим `SITE_URL`, `rsync` по SSH |
+| 9 | Сервер или аккаунт на хостинге | аккаунт Cloudflare; токен API и идентификатор аккаунта хранятся в секретах репозитория (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`) |
+| 10 | Скорректировать YAML под площадку | отдельное задание `deploy-cloudflare`: сборка с другим `SITE_URL`, выкладка командой `wrangler pages deploy` |
 | 11 | Базовый URL | `site_url` берётся из переменной окружения `SITE_URL`; `use_directory_urls: true`; ссылки относительные |
 | 12 | Проверка не только на глаз | шаг `healthcheck` в CI: код ответа HTTP 200 и контрольная строка в HTML; поиск и отображение без внешних CDN |
 | 13 | Лицензии | контент — CC BY 4.0 (`LICENSE-CONTENT.md`), код — MIT (`LICENSE`) |
@@ -27,7 +27,7 @@ MkDocs строит страницы с относительными ссылк�
 site_url: !ENV [SITE_URL, "https://777werona-afk.github.io/vr-gaze-site/"]
 ```
 
-В CI сайт собирается дважды: с адресом GitHub Pages и с адресом хостинга в подкаталоге. Типичная ошибка при размещении в подкаталоге — абсолютные пути вида `/assets/...`; здесь их нет.
+В CI сайт собирается дважды: с адресом GitHub Pages и с адресом на Cloudflare Pages. Типичная ошибка при размещении в подкаталоге — абсолютные пути вида `/assets/...`; здесь их нет.
 
 ## Проверка результата развёртывания
 
