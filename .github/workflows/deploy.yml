@@ -4,11 +4,18 @@ name: Build and deploy docs
 #  - push в main            -> lint -> build -> deploy (Pages и Cloudflare)
 #  - pull_request в main    -> lint -> build (деплой пропускается, секреты форков недоступны)
 #  - workflow_dispatch      -> ручной запуск (деплой только если выбрана ветка main)
+#  Изменения только в server/ (REST API, задание 6) этот пайплайн не запускают, у них свой server.yml
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'server/**'
+      - '.github/workflows/server.yml'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'server/**'
+      - '.github/workflows/server.yml'
   workflow_dispatch:
 
 # минимальные права по умолчанию; расширяются точечно в нужных заданиях
