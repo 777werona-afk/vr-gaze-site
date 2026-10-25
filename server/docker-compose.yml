@@ -1,3 +1,6 @@
+# Полный стек: БД + миграции + приложение (+ тесты по профилю test).
+#   docker compose up -d --build                    — запустить API на http://127.0.0.1:8000/docs
+#   docker compose --profile test run --rm tests    — прогнать тесты в контейнере
 services:
   db:
     image: postgres:16
@@ -7,6 +10,37 @@ services:
       POSTGRES_DB: tasks
     ports: ["5432:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d tasks"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      target: runtime
+    image: task-manager-api:local
+    environment:
+      DATABASE_URL: postgresql+asyncpg://app:app@db:5432/tasks
+    depends_on:
+      db:
+        condition: service_healthy   # ждём, пока PostgreSQL начнёт принимать соединения
+    # миграции применяются перед запуском сервера; если они упадут, uvicorn не стартует
+    command: ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    ports: ["8000:8000"]
+    restart: unless-stopped
+
+  tests:
+    build:
+      context: .
+      target: test
+    environment:
+      TEST_DATABASE_URL: postgresql+asyncpg://app:app@db:5432/tasks_test
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["test"]
 
 volumes:
   pgdata:

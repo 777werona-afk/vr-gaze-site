@@ -14,14 +14,10 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(100))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # один пользователь — много задач
-    tasks: Mapped[list["Task"]] = relationship(
-        back_populates="owner", cascade="all, delete-orphan"
-    )
+    tasks: Mapped[list["Task"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
 
 
 class Task(Base):
@@ -31,11 +27,7 @@ class Task(Base):
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text)
     done: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    owner_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
 
     owner: Mapped["User"] = relationship(back_populates="tasks")

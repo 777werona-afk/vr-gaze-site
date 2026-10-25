@@ -1,0 +1,12 @@
+# Настройки линтера ruff (запускается в CI: job lint)
+target-version = "py311"
+line-length = 100
+extend-exclude = ["migrations/versions"]
+
+[lint]
+# E/W — pycodestyle, F — pyflakes, I — порядок импортов, UP — современный синтаксис, B — bugbear
+select = ["E", "W", "F", "I", "UP", "B"]
+
+[lint.flake8-bugbear]
+# Depends()/Query() в значениях по умолчанию — штатный приём FastAPI
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.params.Depends", "fastapi.params.Query"]
