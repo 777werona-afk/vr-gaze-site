@@ -8,7 +8,7 @@ import pytest
 async def test_create_user_201(client):
     """1. Создание пользователя возвращает 201 и данные пользователя."""
     resp = await client.post("/users", json={"email": "marina@example.com", "name": "Марина"})
-    assert resp.status_code == 200  # намеренная ошибка для проверки «красного» pipeline (шаг 8)
+    assert resp.status_code == 201
     body = resp.json()
     assert body["id"] == 1
     assert body["email"] == "marina@example.com"
