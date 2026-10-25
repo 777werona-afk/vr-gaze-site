@@ -24,6 +24,7 @@ class _NoNullUpdates(BaseModel):
 
 # ---------- User ----------
 
+
 class UserCreate(BaseModel):
     email: EmailStr
     name: Name
@@ -46,6 +47,7 @@ class UserUpdate(_NoNullUpdates):
 
 
 # ---------- Task ----------
+
 
 class TaskCreate(BaseModel):
     title: Title

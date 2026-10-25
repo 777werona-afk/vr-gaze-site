@@ -35,7 +35,9 @@ class ProcessTimeMiddleware(BaseHTTPMiddleware):
 
 app = FastAPI(
     title="Менеджер задач",
-    description="REST API для пользователей и их задач: FastAPI + PostgreSQL + SQLAlchemy 2.0 + Pydantic v2",
+    description=(
+        "REST API для пользователей и их задач: FastAPI + PostgreSQL + SQLAlchemy 2.0 + Pydantic v2"
+    ),
     version="1.0.0",
 )
 app.add_middleware(ProcessTimeMiddleware)

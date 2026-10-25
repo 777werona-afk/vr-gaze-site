@@ -58,9 +58,7 @@ async def get_task(task_id: int, session: AsyncSession = Depends(get_session)):
 
 
 @router.patch("/{task_id}", response_model=TaskRead, responses=NOT_FOUND)
-async def update_task(
-    task_id: int, data: TaskUpdate, session: AsyncSession = Depends(get_session)
-):
+async def update_task(task_id: int, data: TaskUpdate, session: AsyncSession = Depends(get_session)):
     task = await get_task_or_404(task_id, session)
     # exclude_unset: меняем только те поля, которые клиент реально прислал
     for field, value in data.model_dump(exclude_unset=True).items():
@@ -70,9 +68,7 @@ async def update_task(
     return task
 
 
-@router.delete(
-    "/{task_id}", status_code=status.HTTP_204_NO_CONTENT, responses=NOT_FOUND
-)
+@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT, responses=NOT_FOUND)
 async def delete_task(task_id: int, session: AsyncSession = Depends(get_session)):
     task = await get_task_or_404(task_id, session)
     await session.delete(task)

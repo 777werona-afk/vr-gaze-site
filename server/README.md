@@ -38,7 +38,7 @@ server/
 ├── migrations/          # Alembic (alembic init -t async migrations)
 │   └── versions/        # первая миграция создана через --autogenerate
 ├── docs/screenshots/    # скриншоты для отчёта
-├── tests/smoke_test.py  # смоук-тест всех эндпоинтов (только стандартная библиотека)
+├── scripts/smoke_test.py  # смоук-тест всех эндпоинтов (только стандартная библиотека)
 ├── alembic.ini
 ├── docker-compose.yml
 ├── requirements.txt
@@ -85,7 +85,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-> В `requirements.txt` указан `pydantic[email]`, а не просто `pydantic`: тип `EmailStr` требует пакет `email-validator`, который ставится с этим extra.
+> В `requirements.txt` указаны `pydantic[email]` и `sqlalchemy[asyncio]`: тип `EmailStr` требует пакет `email-validator`, а асинхронный режим SQLAlchemy 2.1 — пакет `greenlet`; оба ставятся только с этими extras.
 
 **4. Создать файл `.env` со строкой подключения**
 
@@ -118,7 +118,7 @@ docker compose exec db psql -U app -d tasks -c "\dt"
 **9. (необязательно) Прогнать смоук-тест всех эндпоинтов** — в другом терминале, пока сервис запущен:
 
 ```bash
-python tests/smoke_test.py http://127.0.0.1:8000
+python scripts/smoke_test.py http://127.0.0.1:8000
 ```
 
 Остановить базу: `docker compose down` (данные сохранятся в volume `pgdata`; `docker compose down -v` удалит и их).
@@ -224,7 +224,7 @@ alembic upgrade head
 
 Workflow [`.github/workflows/server.yml`](../.github/workflows/server.yml) запускается при изменениях в `server/`:
 
-1. **test** — поднимает PostgreSQL 16 как сервис, ставит зависимости, применяет миграции (`alembic upgrade head`), выводит `\dt`, запускает `uvicorn` и прогоняет `tests/smoke_test.py`: 22 проверки всех эндпоинтов и кодов ответа (201, 200, 204, 404, 409, 422) и наличие заголовка `X-Process-Time`.
+1. **test** — поднимает PostgreSQL 16 как сервис, ставит зависимости, применяет миграции (`alembic upgrade head`), выводит `\dt`, запускает `uvicorn` и прогоняет `scripts/smoke_test.py`: 22 проверки всех эндпоинтов и кодов ответа (201, 200, 204, 404, 409, 422) и наличие заголовка `X-Process-Time`.
 2. **deploy-ssh** — выкладывает код сервера по SSH собственным action [rsync-ssh-deploy](https://github.com/777werona-afk/rsync-ssh-deploy) (`@v1`), так же как сайт в `deploy.yml`. Постоянного сервера нет, поэтому выкладка идёт на `sshd`, поднятый на раннере; для реального сервера достаточно подставить секреты `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_KEY`, `DEPLOY_KNOWN_HOSTS` и путь.
 
 ## Ответы на контрольные вопросы
