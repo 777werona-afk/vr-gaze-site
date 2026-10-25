@@ -117,7 +117,7 @@ async def test_limit_out_of_range_422(client, limit):
     assert resp.status_code == 422
 
 
-@pytest.mark.parametrize("title", ["", "x" * 201])
+@pytest.mark.parametrize("title", ["", "x" * 201], ids=["empty", "201-chars"])
 async def test_title_length_422(client, user, title):
     resp = await client.post("/tasks", json={"title": title, "owner_id": user["id"]})
     assert resp.status_code == 422
