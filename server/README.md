@@ -85,7 +85,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-> В `requirements.txt` указан `pydantic[email]`, а не просто `pydantic`: тип `EmailStr` требует пакет `email-validator`, который ставится с этим extra.
+> В `requirements.txt` указаны `pydantic[email]` и `sqlalchemy[asyncio]`: тип `EmailStr` требует пакет `email-validator`, а асинхронный режим SQLAlchemy 2.1 — пакет `greenlet`; оба ставятся только с этими extras.
 
 **4. Создать файл `.env` со строкой подключения**
 
