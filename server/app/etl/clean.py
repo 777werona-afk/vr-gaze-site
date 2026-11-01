@@ -152,6 +152,8 @@ def clean_csv(data: bytes) -> CleanedLog:
     # --- преобразование: порядок по времени, единичные векторы, без повторов меток времени
     order = np.argsort(t, kind="stable")
     t, xyz, pupil, openness, norm = t[order], xyz[order], pupil[order], openness[order], norm[order]
+    if len(t):
+        t = t - t[0]  # секунды от самого раннего отсчёта, а не от первой строки файла
     xyz = xyz / norm[:, None]
     keep = np.concatenate([[True], np.diff(t) > 0]) if len(t) else np.zeros(0, dtype=bool)
     duplicates = int((~keep).sum())
