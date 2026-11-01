@@ -10,6 +10,7 @@
 | Сайт (корень репозитория) | статический сайт на MkDocs (тема Material) с результатами обработки записи взгляда в VR | Задание 3: «Генераторы статических сайтов для публикации результатов исследований» |
 | [`server/`](server/) | REST API «Менеджер задач» на FastAPI + PostgreSQL + SQLAlchemy 2.0 + Pydantic v2, миграции Alembic | Задание 6: «Разработка REST API на FastAPI с использованием PostgreSQL, SQLAlchemy и Pydantic» → **[отчёт: server/README.md](server/README.md)** |
 | [`server/`](server/) + `ci.yml` | тесты на PostgreSQL, Docker-образ, docker-compose, CI/CD с публикацией образа в GHCR и Docker Hub | Задание 7: «Тестирование, контейнеризация и CI/CD для FastAPI-приложения» → **[отчёт: server/README.md#задание-7](server/README.md#задание-7-тестирование-контейнеризация-и-cicd)** |
+| [`server/`](server/) | итоговый проект: REST API «VR-музей: стабилизация взгляда» — ETL CSV-логов, оценка тремора 4–12 Гц, вердикт да/нет (есть дестабилизация взгляда), аналитика, UI | Задание 8: итоговый проект → **[описание: server/README.md](server/README.md)**, [ERD](server/docs/ERD.md) |
 
 - Сайт: https://777werona-afk.github.io/vr-gaze-site/
 - Выкладка по SSH: собственный GitHub Action [rsync-ssh-deploy](https://github.com/777werona-afk/rsync-ssh-deploy) (подключён как `777werona-afk/rsync-ssh-deploy@v1` и для сайта, и для сервера)
