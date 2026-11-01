@@ -5,3 +5,8 @@ venv/
 .env
 .idea/
 .vscode/
+
+# отчёты о покрытии тестами
+.coverage
+htmlcov/
+coverage.xml

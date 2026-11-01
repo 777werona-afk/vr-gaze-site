@@ -1,3 +1,246 @@
+# VR-музей: стабилизация взгляда — информационная система (итоговый проект)
+
+[![CI](https://github.com/777werona-afk/vr-gaze-site/actions/workflows/ci.yml/badge.svg)](https://github.com/777werona-afk/vr-gaze-site/actions/workflows/ci.yml)
+
+Курс «Разработка на Python и инженерия данных», задание 8 «Итоговый проект».
+**Выполнила:** Кожевяткина Марина
+
+> Ниже описан итоговый проект. Отчёты по заданиям 6–7 («Менеджер задач», тесты, Docker и CI/CD)
+> остались в этом же файле ниже: раздел [«Менеджер задач»](#менеджер-задач--rest-api-на-fastapi).
+
+## 1. Предметная область и назначение
+
+Люди с нарушениями моторики плохо удерживают взгляд и голову, поэтому в VR им сложно навестись
+на объект. В VR-музее экспонат выбирается задержкой взгляда (dwell-click). Система хранит записи
+взгляда из такого музея, очищает их, считает метрики стабильности и **отвечает на один вопрос по
+каждой сессии: есть дестабилизация взгляда — да или нет**. Результаты сравниваются между группами
+участников (с нарушениями моторики и контрольной).
+
+**Как получается ответ «да/нет».** Считается RMS колебаний взгляда в полосе физиологического
+тремора 4–12 Гц (в градусах). Если он не меньше порога (по умолчанию 0,25°, настройка
+`TREMOR_THRESHOLD_DEG`), ответ «да». Расчёт совпадает со скриптом `scripts/analyze.py`, по
+которому строится сайт с результатами, поэтому числа на сайте и в API одинаковые.
+
+**Оговорки.** Это пилотный скрининговый критерий, а не клиническая диагностика. Пилот: 8 записей
+одного участника (автора). Порог 0,25° выбран как стартовый и должен быть пересмотрен, когда
+появятся данные контрольной группы. Глубокое исследование (подбор порога, спектральный анализ,
+статистика между группами) в проект не входит.
+
+### Результат на пилотных данных (`data/raw`, порог 0,25°)
+
+| Сессия | Строк в CSV | Тремор 4–12 Гц, ° | Дестабилизация |
+|---|---|---|---|
+| gaze_session_20260916_205941 | 2938 | 0,000 | брак: взгляд неподвижен, похоже на сбой трекинга |
+| gaze_session_20260916_210658 | 2866 | 0,369 | **да** |
+| gaze_session_20260916_210915 | 471 | 0,157 | нет |
+| gaze_session_20260916_210929 | 2575 | 0,375 | **да** |
+| gaze_session_20260916_211104 | 326 | 0,156 | нет |
+| gaze_session_20260916_211118 | 2898 | 0,370 | **да** |
+| gaze_session_20260916_212632 | 2678 | 0,232 | нет |
+| gaze_session_20260916_212720 | 2380 | 0,202 | нет |
+
+Итого: 3 сессии «да», 4 «нет», 1 в браке.
+
+## 2. Стек
+
+Python 3.12 · FastAPI · Pydantic v2 · SQLAlchemy 2 (async, asyncpg) · PostgreSQL 16 · Alembic ·
+numpy и scipy (расчёт метрик) · pytest, pytest-asyncio, pytest-cov · ruff · Docker Compose ·
+GitHub Actions. Интерфейс: HTML и JavaScript (fetch) без сборки.
+
+## 3. Запуск
+
+### Через Docker (рекомендуется)
+
+```bash
+cd server
+docker compose up -d --build                      # PostgreSQL -> миграции Alembic -> API
+docker compose exec app python -m app.seed        # группы, участники, экспонаты (повторно безопасно)
+docker compose exec app python -m app.etl.import_data --source /data/raw   # загрузка CSV-логов
+```
+
+Адреса: интерфейс http://127.0.0.1:8000/ui/ · Swagger UI http://127.0.0.1:8000/docs.
+
+### Локально
+
+```bash
+cd server
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+cp .env.example .env                              # при необходимости поправьте DATABASE_URL
+docker compose up -d db                           # или свой PostgreSQL 16
+alembic upgrade head
+python -m app.seed
+python -m app.etl.import_data --source ../data/raw
+uvicorn app.main:app --reload
+```
+
+### Переменные окружения
+
+Настройки и секреты хранятся в окружении (`.env`), в коде их нет. Образец: `.env.example`.
+
+| Переменная | Значение по умолчанию | Назначение |
+|---|---|---|
+| `DATABASE_URL` | нет (обязательна) | строка подключения, например `postgresql+asyncpg://app:app@localhost:5432/tasks` |
+| `TREMOR_THRESHOLD_DEG` | `0.25` | порог RMS в полосе 4–12 Гц, с которого ответ «да», градусы |
+| `MIN_VALID_PCT` | `90` | если валидных отсчётов меньше, сессия получает статус «брак» |
+| `SQL_ECHO` | `false` | печатать SQL-запросы в лог |
+| `TEST_DATABASE_URL` | `...localhost:5432/tasks_test` | БД для тестов (создаётся автоматически) |
+
+## 4. База данных и ERD
+
+Шесть связанных таблиц: `participant_groups`, `participants`, `gaze_sessions`, `gaze_samples`,
+`exhibits` и ассоциативная `exhibit_views` (связь N:M между сессиями и экспонатами). Есть
+первичные и внешние ключи, `NOT NULL`, `UNIQUE`, `CHECK` и индексы по полям фильтрации. Схема
+создаётся только миграциями Alembic (`alembic upgrade head`), миграции обратимы
+(`alembic downgrade base` проверяется в тестах). Подробная диаграмма и описание сущностей:
+**[docs/ERD.md](docs/ERD.md)**.
+
+```mermaid
+erDiagram
+    PARTICIPANT_GROUPS ||--o{ PARTICIPANTS : "1:N"
+    PARTICIPANTS ||--o{ GAZE_SESSIONS : "1:N"
+    GAZE_SESSIONS ||--o{ GAZE_SAMPLES : "1:N"
+    GAZE_SESSIONS ||--o{ EXHIBIT_VIEWS : "N:M"
+    EXHIBITS ||--o{ EXHIBIT_VIEWS : "N:M"
+```
+
+## 5. Бизнес-правила (слой `app/services`)
+
+1. **Контроль качества сессии** (`POST /sessions/{id}/check`). Сессия получает статус `rejected`
+   («брак»), если валидных отсчётов меньше `MIN_VALID_PCT`, если отсчётов слишком мало для оценки
+   или если взгляд абсолютно неподвижен (так выглядит сбой трекинга). Иначе статус `checked` и
+   ответ «да/нет». Брак не попадает в датасет и в аналитику.
+2. **Жизненный цикл сессии**: `created` → `recorded` → `checked` → `in_dataset`. Перескакивать
+   шаги и возвращаться назад нельзя (ответ 409). Сессия создаётся через API, данные в неё
+   загружает ETL (`recorded`), проверка даёт `checked`, публикация (`POST /sessions/{id}/publish`)
+   даёт `in_dataset`.
+3. **Dwell-click** (`POST /sessions/{id}/views`). Просмотр экспоната засчитывается, только если
+   взгляд удерживался не меньше порога экспоната (иначе 422). Повторные просмотры суммируются
+   в одной записи одним атомарным upsert.
+
+Также реализованы агрегирующие отчёты (топ экспонатов, сравнение групп), см. раздел API.
+
+## 6. ETL: импорт CSV-логов
+
+Скрипт `app/etl/import_data.py`, запуск из командной строки:
+
+```bash
+python -m app.etl.import_data --source ../data/raw                  # все *.csv из папки
+python -m app.etl.import_data --source session.csv --participant P-001 --group "Контрольная"
+python -m app.etl.import_data --source session.csv --session-id 5   # заполнить созданную сессию
+```
+
+Этапы: **извлечение** (чтение CSV `timestamp, gaze_x, gaze_y, gaze_z, pupil, openness`, разделитель
+определяется автоматически) → **валидация и очистка** (строки с нечисловыми значениями, нулевой
+вектор взгляда как потеря трекинга, повторы меток времени) → **преобразование** (секунды от начала
+записи, порядок по времени, единичные векторы) → **загрузка** в БД пачками.
+
+- **Идемпотентность.** Файл опознаётся по SHA-256 содержимого: повторный запуск пропускает уже
+  загруженные файлы и не создаёт дубликатов (в том числе при параллельных запусках: уникальный
+  ключ в БД).
+- **Лог запуска.** По каждому файлу пишется, сколько строк загружено и сколько отклонено, с
+  причинами; в конце общий итог. Код возврата 1, если хотя бы один файл не удалось загрузить.
+- Чистые функции очистки (`app/etl/clean.py`) покрыты юнит-тестами.
+
+## 7. REST API
+
+Swagger UI: `/docs`. Ошибки приходят в едином формате `{"detail": ..., "code": ...}`
+(`not_found`, `conflict`, `rule_violation`, `validation_error`, `http_<код>`). Коды ответов:
+200, 201, 204, 400, 404, 409, 422.
+
+| Метод и путь | Назначение |
+|---|---|
+| `POST /groups`, `GET /groups` | группы участников |
+| `POST /participants`, `GET /participants`, `GET/PATCH/DELETE /participants/{id}` | участники; список с фильтром `group_id`, сортировкой `sort` и пагинацией `limit/offset` |
+| `POST /exhibits`, `GET /exhibits`, `GET /exhibits/{id}` | экспонаты с порогом dwell-click |
+| `POST /sessions`, `GET /sessions`, `GET/DELETE /sessions/{id}` | сессии; список с фильтрами `status`, `participant_id`, `group_id`, `destabilized`, сортировкой и пагинацией |
+| `POST /sessions/{id}/check` | проверка: контроль качества и ответ «да/нет» |
+| `POST /sessions/{id}/publish` | добавить проверенную сессию в датасет |
+| `GET /sessions/{id}/stability` | итог по сессии: «да», «нет» или причина брака |
+| `POST /sessions/{id}/views`, `GET /sessions/{id}/views` | просмотры экспонатов (dwell-click) |
+| `GET /analytics/dwell-by-exhibit?top=5` | топ-N экспонатов по суммарному времени взгляда |
+| `GET /analytics/stability-by-group` | по группам: сессий с ответом «да» и «нет», брак, доля «да», средний тремор |
+
+Эндпоинты `/users` и `/tasks` остались от заданий 6–7.
+
+Примеры запросов:
+
+```bash
+# группа и участник
+curl -X POST localhost:8000/groups -H 'Content-Type: application/json' \
+     -d '{"name": "Нарушения моторики", "is_control": false}'
+curl -X POST localhost:8000/participants -H 'Content-Type: application/json' \
+     -d '{"code": "P-001", "group_id": 1}'
+
+# новая сессия, затем загрузка данных ETL и проверка
+curl -X POST localhost:8000/sessions -H 'Content-Type: application/json' -d '{"participant_id": 1}'
+docker compose exec app python -m app.etl.import_data --source /data/raw/gaze_session_20260916_210658.csv --session-id 1
+curl -X POST localhost:8000/sessions/1/check
+curl localhost:8000/sessions/1/stability
+# для этого файла: "destabilized": true, "tremor_rms_deg" около 0.369, "threshold_deg": 0.25, "verdict": "да"
+
+# dwell-click: взгляд удерживался 1500 мс; список сессий с ответом «да», по убыванию тремора
+curl -X POST localhost:8000/sessions/1/views -H 'Content-Type: application/json' \
+     -d '{"exhibit_id": 1, "dwell_ms": 1500}'
+curl 'localhost:8000/sessions?destabilized=true&sort=-tremor_rms_deg&limit=10'
+curl 'localhost:8000/analytics/stability-by-group'
+```
+
+## 8. Веб-интерфейс
+
+Страница `/ui/` (файл `app/static/index.html`, HTML и JavaScript, работает через этот же API):
+список участников и сессий, создание групп, участников, экспонатов и сессий, изменение кода
+участника, ключевая операция «Проверить сессию» с ответом «да/нет», регистрация просмотра
+экспоната, отчёты аналитики. Ошибки API показываются пользователю в красной плашке.
+
+## 9. Тесты и покрытие
+
+```bash
+cd server
+pytest -v --cov=app --cov-report=term-missing --cov-fail-under=70
+# или в контейнере:  docker compose --profile test run --rm tests
+```
+
+- Юнит-тесты без БД: расчёт стабильности (`test_stability.py`), правила качества и переходы
+  жизненного цикла (`test_quality.py`), очистка CSV (`test_etl_clean.py`).
+- Интеграционные тесты на реальной PostgreSQL через `httpx.AsyncClient` поверх приложения
+  (`test_gaze_api.py`, `test_etl_import.py`, `test_api.py` от заданий 6–7), включая негативные
+  сценарии: 404, 409, 422, нарушение бизнес-правил.
+- `fastapi.testclient.TestClient`: `test_testclient.py` (схема OpenAPI, единый формат ошибок,
+  страница интерфейса).
+- Тестовая БД `tasks_test` создаётся автоматически, схема накатывается миграциями и откатывается
+  после прогона, между тестами таблицы очищаются.
+- Покрытие измеряется `pytest-cov`, порог 70 % проверяется в CI; отчёт HTML сохраняется как
+  артефакт `coverage-html` запуска CI.
+
+## 10. CI на GitHub Actions
+
+Workflow `.github/workflows/ci.yml` запускается на каждый push и pull request: `ruff check` и
+`ruff format --check` (линтинг), `pytest` на PostgreSQL 16 с порогом покрытия 70 %, затем сборка
+образа и проверка стека через `docker compose`; при push в `main` образ публикуется в GHCR и
+Docker Hub.
+
+## 11. Структура
+
+```
+server/
+├── app/
+│   ├── routers/      # эндпоинты (groups, participants, exhibits, sessions, analytics, ...)
+│   ├── services/     # бизнес-логика: stability, quality, sessions, analytics, errors
+│   ├── etl/          # clean.py (очистка), import_data.py (CLI импорта)
+│   ├── static/       # веб-интерфейс (index.html)
+│   ├── models.py     # SQLAlchemy-модели
+│   ├── schemas.py    # Pydantic-схемы (Create / Read / Update)
+│   ├── seed.py       # тестовые данные
+│   └── main.py       # приложение, middleware, единый формат ошибок
+├── migrations/       # Alembic
+├── tests/
+├── docs/ERD.md
+├── docker-compose.yml, Dockerfile, requirements*.txt, .env.example
+```
+
+---
+
 # Менеджер задач — REST API на FastAPI
 
 [![CI](https://github.com/777werona-afk/vr-gaze-site/actions/workflows/ci.yml/badge.svg)](https://github.com/777werona-afk/vr-gaze-site/actions/workflows/ci.yml)
