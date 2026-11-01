@@ -5,3 +5,5 @@ asyncpg
 pydantic[email]>=2
 pydantic-settings
 alembic
+numpy
+scipy
