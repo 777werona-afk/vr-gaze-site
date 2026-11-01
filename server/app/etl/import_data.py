@@ -32,7 +32,7 @@ from app.services.errors import ConflictError, DomainError, NotFoundError
 
 logger = logging.getLogger("app.etl")
 
-CHUNK = 5000
+CHUNK = 1000  # 7 колонок x 1000 строк < лимита asyncpg на 32767 параметров запроса
 DEFAULT_PARTICIPANT = "P-PILOT"
 DEFAULT_GROUP = "Пилот"
 
