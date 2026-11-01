@@ -33,7 +33,7 @@ COPY requirements.txt requirements-dev.txt ./
 RUN pip install -r requirements-dev.txt
 COPY --chown=app:app . .
 USER app
-CMD ["pytest", "-v"]
+CMD ["pytest", "-v", "--cov=app", "--cov-report=term-missing", "--cov-fail-under=70"]
 
 # ---------------------------------------------------------------- runtime (итоговый образ)
 FROM base AS runtime

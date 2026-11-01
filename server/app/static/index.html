@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VR-музей: стабилизация взгляда</title>
+  <style>
+    :root { --bg:#f6f4f0; --ink:#14213d; --muted:#5b6475; --card:#fff; --line:#dcd8d0;
+            --accent:#2563a8; --yes:#b42318; --no:#1a7f4b; --warn:#b26a00; }
+    * { box-sizing: border-box; }
+    body { margin:0; font:15px/1.5 system-ui, "Segoe UI", sans-serif; background:var(--bg); color:var(--ink); }
+    header { background:var(--ink); color:#fff; padding:16px 24px; }
+    header h1 { margin:0; font-size:20px; }
+    header p { margin:4px 0 0; color:#c9d3e6; font-size:13px; }
+    main { max-width:1100px; margin:0 auto; padding:16px; display:grid; gap:16px; }
+    section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; }
+    h2 { margin:0 0 10px; font-size:17px; }
+    form { display:flex; flex-wrap:wrap; gap:8px; align-items:end; margin-bottom:12px; }
+    label { display:grid; gap:2px; font-size:12px; color:var(--muted); }
+    input, select, button { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; }
+    button { background:var(--accent); border-color:var(--accent); color:#fff; cursor:pointer; }
+    button.secondary { background:#fff; color:var(--accent); }
+    button:disabled { opacity:.5; cursor:default; }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+    th { color:var(--muted); font-weight:600; font-size:12px; }
+    .badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:12px; background:#e8eef7; }
+    .badge.rejected { background:#fde8e6; color:var(--yes); }
+    .badge.checked, .badge.in_dataset { background:#e3f4ea; color:var(--no); }
+    .yes { color:var(--yes); font-weight:700; }
+    .no { color:var(--no); font-weight:700; }
+    .error { background:#fde8e6; color:var(--yes); border:1px solid #f4b9b3; border-radius:8px; padding:10px 14px; }
+    .ok { background:#e3f4ea; color:var(--no); border:1px solid #b6e0c7; border-radius:8px; padding:10px 14px; }
+    .muted { color:var(--muted); }
+    .pager { display:flex; gap:8px; align-items:center; margin-top:8px; }
+    .actions { display:flex; gap:6px; flex-wrap:wrap; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>VR-музей: стабилизация взгляда</h1>
+    <p>Итог по каждой сессии: есть дестабилизация взгляда — да или нет. API: <a href="/docs" style="color:#fff">/docs</a></p>
+  </header>
+  <main>
+    <div id="error" class="error" role="alert" hidden></div>
+    <div id="notice" class="ok" role="status" hidden></div>
+
+    <section>
+      <h2>Группы и участники</h2>
+      <form id="group-form">
+        <label>Новая группа <input name="name" required maxlength="100" placeholder="Нарушения моторики"></label>
+        <label><span>Контрольная?</span><select name="is_control"><option value="false">нет</option><option value="true">да</option></select></label>
+        <button>Добавить группу</button>
+      </form>
+      <form id="participant-form">
+        <label>Код участника <input name="code" required maxlength="50" placeholder="P-001"></label>
+        <label>Группа <select name="group_id" id="participant-group" required></select></label>
+        <button>Добавить участника</button>
+      </form>
+      <table>
+        <thead><tr><th>ID</th><th>Код</th><th>Группа</th><th></th></tr></thead>
+        <tbody id="participants"></tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Сессии</h2>
+      <form id="session-form">
+        <label>Участник <select name="participant_id" id="session-participant" required></select></label>
+        <button>Создать сессию</button>
+        <label>Статус
+          <select id="status-filter">
+            <option value="">все</option><option>created</option><option>recorded</option>
+            <option>checked</option><option>in_dataset</option><option>rejected</option>
+          </select>
+        </label>
+      </form>
+      <table>
+        <thead><tr><th>ID</th><th>Участник</th><th>Статус</th><th>Тремор 4–12 Гц, °</th><th>Дестабилизация</th><th>Примечание</th><th></th></tr></thead>
+        <tbody id="sessions"></tbody>
+      </table>
+      <div class="pager">
+        <button class="secondary" id="prev">← Назад</button>
+        <span id="page" class="muted"></span>
+        <button class="secondary" id="next">Вперёд →</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Экспонаты и просмотры (dwell-click)</h2>
+      <form id="exhibit-form">
+        <label>Название <input name="title" required maxlength="200" placeholder="Картина «Утро»"></label>
+        <label>Порог удержания, мс <input name="dwell_threshold_ms" type="number" min="1" value="1000" required></label>
+        <button>Добавить экспонат</button>
+      </form>
+      <form id="view-form">
+        <label>Сессия <select name="session_id" id="view-session" required></select></label>
+        <label>Экспонат <select name="exhibit_id" id="view-exhibit" required></select></label>
+        <label>Взгляд удерживался, мс <input name="dwell_ms" type="number" min="1" value="1500" required></label>
+        <button>Засчитать просмотр</button>
+      </form>
+    </section>
+
+    <section>
+      <h2>Аналитика</h2>
+      <div class="actions" style="margin-bottom:10px">
+        <button id="load-groups">Дестабилизация по группам</button>
+        <button id="load-exhibits" class="secondary">Топ экспонатов по времени взгляда</button>
+      </div>
+      <div id="analytics" class="muted">Нажмите кнопку, чтобы загрузить отчёт. В расчёт идут только проверенные сессии.</div>
+    </section>
+  </main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const esc = (v) => String(v ?? "—").replace(/[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  const state = { groups: [], participants: [], exhibits: [], sessions: [], page: 0, size: 10 };
+
+  function formatDetail(body, status) {
+    if (!body) return `Ошибка ${status}`;
+    if (Array.isArray(body.detail)) {
+      return body.detail.map((e) => `${(e.loc || []).slice(1).join(".")}: ${e.msg}`).join("; ");
+    }
+    return body.detail || `Ошибка ${status}`;
+  }
+
+  async function api(path, options = {}) {
+    const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+    if (res.status === 204) return null;
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(formatDetail(body, res.status));
+    return body;
+  }
+
+  function show(id, text) {
+    const box = $(id);
+    box.textContent = text;
+    box.hidden = false;
+  }
+  function clearMessages() { $("error").hidden = true; $("notice").hidden = true; }
+  async function run(action, doneMessage) {
+    clearMessages();
+    try {
+      await action();
+      if (doneMessage) show("notice", doneMessage);
+    } catch (err) {
+      show("error", err.message);
+    }
+  }
+
+  const formData = (form) => Object.fromEntries(new FormData(form).entries());
+  const post = (path, body) => api(path, { method: "POST", body: JSON.stringify(body) });
+  const options = (items, label) => items.map((i) => `<option value="${esc(i.id)}">${esc(label(i))}</option>`).join("");
+
+  async function loadReferences() {
+    [state.groups, state.participants, state.exhibits] = await Promise.all([
+      api("/groups"), api("/participants?limit=100"), api("/exhibits?limit=200"),
+    ]);
+    $("participant-group").innerHTML = options(state.groups, (g) => g.name);
+    $("session-participant").innerHTML = options(state.participants, (p) => p.code);
+    $("view-exhibit").innerHTML = options(state.exhibits, (e) => `${e.title} (порог ${e.dwell_threshold_ms} мс)`);
+    renderParticipants();
+  }
+
+  function renderParticipants() {
+    const groupName = (id) => (state.groups.find((g) => g.id === id) || {}).name;
+    $("participants").innerHTML = state.participants.map((p) => `
+      <tr><td>${esc(p.id)}</td><td>${esc(p.code)}</td><td>${esc(groupName(p.group_id))}</td>
+      <td><button class="secondary" data-action="rename" data-id="${esc(p.id)}">Изменить код</button></td></tr>`).join("");
+  }
+
+  async function loadSessions() {
+    const status = $("status-filter").value;
+    const query = new URLSearchParams({ limit: state.size, offset: state.page * state.size, sort: "-id" });
+    if (status) query.set("status", status);
+    state.sessions = await api(`/sessions?${query}`);
+    $("view-session").innerHTML = options(state.sessions, (s) => `№${s.id} (${s.status})`);
+    $("prev").disabled = state.page === 0;
+    $("next").disabled = state.sessions.length < state.size;
+    $("page").textContent = `страница ${state.page + 1}`;
+    renderSessions();
+  }
+
+  function verdictCell(s) {
+    if (s.destabilized === true) return '<span class="yes">да</span>';
+    if (s.destabilized === false) return '<span class="no">нет</span>';
+    return '<span class="muted">—</span>';
+  }
+
+  function renderSessions() {
+    const code = (id) => (state.participants.find((p) => p.id === id) || {}).code;
+    $("sessions").innerHTML = state.sessions.map((s) => {
+      const actions = [];
+      if (s.status === "recorded") actions.push(`<button data-action="check" data-id="${esc(s.id)}">Проверить</button>`);
+      if (s.status === "checked") actions.push(`<button class="secondary" data-action="publish" data-id="${esc(s.id)}">В датасет</button>`);
+      const tremor = s.tremor_rms_deg == null ? "—" : s.tremor_rms_deg.toFixed(3);
+      return `<tr><td>${esc(s.id)}</td><td>${esc(code(s.participant_id))}</td>
+        <td><span class="badge ${esc(s.status)}">${esc(s.status)}</span></td><td>${tremor}</td>
+        <td>${verdictCell(s)}</td><td class="muted">${esc(s.reject_reason || "")}</td>
+        <td><div class="actions">${actions.join("")}</div></td></tr>`;
+    }).join("") || '<tr><td colspan="7" class="muted">Сессий пока нет. Данные загружаются ETL-скриптом: python -m app.etl.import_data</td></tr>';
+  }
+
+  $("group-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const data = formData(e.target);
+    run(async () => {
+      await post("/groups", { name: data.name, is_control: data.is_control === "true" });
+      e.target.reset();
+      await loadReferences();
+    }, "Группа добавлена");
+  });
+
+  $("participant-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const data = formData(e.target);
+    run(async () => {
+      await post("/participants", { code: data.code, group_id: Number(data.group_id) });
+      e.target.reset();
+      await loadReferences();
+    }, "Участник добавлен");
+  });
+
+  $("participants").addEventListener("click", (e) => {
+    const button = e.target.closest("button[data-action=rename]");
+    if (!button) return;
+    const participant = state.participants.find((p) => p.id === Number(button.dataset.id));
+    const code = prompt("Новый код участника", participant.code);
+    if (!code || code === participant.code) return;
+    run(async () => {
+      await api(`/participants/${participant.id}`, { method: "PATCH", body: JSON.stringify({ code }) });
+      await loadReferences();
+      await loadSessions();
+    }, "Код участника изменён");
+  });
+
+  $("session-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    run(async () => {
+      await post("/sessions", { participant_id: Number(formData(e.target).participant_id) });
+      state.page = 0;
+      await loadSessions();
+    }, "Сессия создана (статус created). Загрузите в неё данные ETL-скриптом с --session-id");
+  });
+
+  $("status-filter").addEventListener("change", () => { state.page = 0; run(loadSessions); });
+  $("prev").addEventListener("click", () => { state.page -= 1; run(loadSessions); });
+  $("next").addEventListener("click", () => { state.page += 1; run(loadSessions); });
+
+  $("sessions").addEventListener("click", (e) => {
+    const button = e.target.closest("button[data-action]");
+    if (!button) return;
+    const id = button.dataset.id;
+    if (button.dataset.action === "check") {
+      run(async () => {
+        const s = await post(`/sessions/${id}/check`, {});
+        await loadSessions();
+        const answer = s.status === "rejected" ? `брак: ${s.reject_reason}` : (s.destabilized ? "да" : "нет");
+        show("notice", `Сессия ${id}: дестабилизация взгляда — ${answer}`);
+      });
+    } else if (button.dataset.action === "publish") {
+      run(async () => { await post(`/sessions/${id}/publish`, {}); await loadSessions(); }, `Сессия ${id} добавлена в датасет`);
+    }
+  });
+
+  $("exhibit-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const data = formData(e.target);
+    run(async () => {
+      await post("/exhibits", { title: data.title, dwell_threshold_ms: Number(data.dwell_threshold_ms) });
+      e.target.reset();
+      await loadReferences();
+    }, "Экспонат добавлен");
+  });
+
+  $("view-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const data = formData(e.target);
+    run(async () => {
+      const v = await post(`/sessions/${data.session_id}/views`,
+        { exhibit_id: Number(data.exhibit_id), dwell_ms: Number(data.dwell_ms) });
+      show("notice", `Просмотр засчитан: всего ${v.dwell_ms} мс, просмотров ${v.views_count}`);
+    });
+  });
+
+  function table(headers, rows) {
+    const head = headers.map((h) => `<th>${esc(h)}</th>`).join("");
+    const body = rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("");
+    return `<table><thead><tr>${head}</tr></thead><tbody>${body || '<tr><td class="muted">Нет данных</td></tr>'}</tbody></table>`;
+  }
+
+  $("load-groups").addEventListener("click", () => run(async () => {
+    const rows = await api("/analytics/stability-by-group");
+    $("analytics").innerHTML = table(
+      ["Группа", "Контрольная", "Проверено сессий", "Дестабилизация: да", "нет", "Брак", "Доля «да»", "Средний тремор, °"],
+      rows.map((r) => [r.group_name, r.is_control ? "да" : "нет", r.sessions_analyzed, r.destabilized_yes,
+        r.destabilized_no, r.rejected, r.share_yes == null ? "—" : `${Math.round(r.share_yes * 100)}%`,
+        r.mean_tremor_rms_deg == null ? "—" : r.mean_tremor_rms_deg.toFixed(3)]));
+  }));
+
+  $("load-exhibits").addEventListener("click", () => run(async () => {
+    const rows = await api("/analytics/dwell-by-exhibit?top=5");
+    $("analytics").innerHTML = table(
+      ["Экспонат", "Сессий", "Просмотров", "Всего мс", "В среднем мс"],
+      rows.map((r) => [r.title, r.sessions_count, r.views_total, r.total_dwell_ms, Math.round(r.avg_dwell_ms)]));
+  }));
+
+  run(async () => { await loadReferences(); await loadSessions(); });
+</script>
+</body>
+</html>

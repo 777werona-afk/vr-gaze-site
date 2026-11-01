@@ -1,8 +1,8 @@
 name: CI
 
-# REST API «Менеджер задач» (папка server/), задание 7.
+# REST API «VR-музей: стабилизация взгляда» (папка server/): итоговый проект и задание 7.
 #   lint  — ruff (стиль и типичные ошибки)
-#   test  — pytest на реальной PostgreSQL 16 (сервис-контейнер)
+#   test  — pytest на реальной PostgreSQL 16 (сервис-контейнер), покрытие pytest-cov не ниже 70 %
 #   build — сборка образа и проверка всего стека через docker compose;
 #           при push в main образ публикуется в GHCR и Docker Hub
 #   deploy-ssh — выкладка кода сервера собственным action rsync-ssh-deploy (только main)
@@ -84,8 +84,15 @@ jobs:
         run: alembic upgrade head
 
       # тесты сами создают БД tasks_test и накатывают на неё миграции
-      - name: Run tests
-        run: pytest -v
+      - name: Run tests with coverage (threshold 70 %)
+        run: pytest -v --cov=app --cov-report=term-missing --cov-report=html --cov-fail-under=70
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: server/htmlcov
 
   # ---------------------------------------------------------------- 3. build
   build:
