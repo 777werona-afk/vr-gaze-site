@@ -66,7 +66,12 @@ async def engine():
 async def clean_tables(engine):
     """Каждый тест начинается с пустых таблиц и счётчиков id с единицы."""
     async with engine.begin() as conn:
-        await conn.execute(text("TRUNCATE tasks, users RESTART IDENTITY CASCADE"))
+        await conn.execute(
+            text(
+                "TRUNCATE exhibit_views, gaze_samples, gaze_sessions, exhibits, participants, "
+                "participant_groups, tasks, users RESTART IDENTITY CASCADE"
+            )
+        )
     yield
 
 
@@ -91,3 +96,11 @@ async def user(client):
     resp = await client.post("/users", json={"email": "owner@example.com", "name": "Владелец"})
     assert resp.status_code == 201
     return resp.json()
+
+
+@pytest_asyncio.fixture
+async def db(engine):
+    """Сессия БД для тестов, которые вызывают сервисный слой и ETL напрямую (без HTTP)."""
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with session_factory() as session:
+        yield session
