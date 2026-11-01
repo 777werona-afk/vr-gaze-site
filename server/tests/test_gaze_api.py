@@ -99,7 +99,8 @@ async def test_participant_list_filter_sort_and_pagination(client, group):
     assert [p["code"] for p in in_group.json()] == ["P-001", "P-002", "P-003"]
 
     desc = await client.get("/participants", params={"sort": "-code", "limit": 2, "offset": 1})
-    assert [p["code"] for p in desc.json()] == ["P-003", "P-002"]
+    # по убыванию: P-003, P-002, P-001, C-001; пропускаем первого и берём двух
+    assert [p["code"] for p in desc.json()] == ["P-002", "P-001"]
 
     assert (await client.get("/participants", params={"sort": "bogus"})).status_code == 422
     assert (await client.get("/participants", params={"limit": 0})).status_code == 422
